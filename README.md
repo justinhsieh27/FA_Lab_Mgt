@@ -14,7 +14,7 @@ An internal web system for a semiconductor FA Lab. It uses one Excel workbook as
 
 `run.sh` starts the service in the background, storing its PID in `fa-lab.pid` and its output in `logs/fa-lab.log`. To use another port, run `PORT=3001 ./run.sh`.
 
-Open `http://localhost:3000` on the host computer. Other users on the same internal network can use `http://<FA-Lab-host-IP>:3000`.
+Open `http://localhost:4000` on the host computer. Other users on the same internal network can use `http://<FA-Lab-host-IP>:4000`.
 
 Initial accounts (change the passwords before production use):
 
@@ -48,4 +48,4 @@ The service makes a backup at startup and once every 24 hours. Keep these folder
 
 ## Deployment note
 
-This first version intentionally runs as a local internal service. Before exposing it beyond the FAB intranet, place it behind the factory's approved HTTPS reverse proxy and firewall policy. Do not expose port 3000 directly to the public Internet.
+This first version intentionally runs as a local internal service. Before exposing it beyond the FAB intranet, place it behind the factory's approved HTTPS reverse proxy and firewall policy. Do not expose port 4000 directly to the public Internet.

@@ -8,7 +8,7 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 
 const app = express();
-const PORT = Number(process.env.PORT || 3000);
+const PORT = Number(process.env.PORT || 4000);
 const ROOT = __dirname;
 const DATA_DIR = process.env.FA_LAB_DATA_DIR || path.join(ROOT, 'data');
 const UPLOAD_DIR = process.env.FA_LAB_UPLOAD_DIR || path.join(ROOT, 'uploads');
