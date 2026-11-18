@@ -7,7 +7,7 @@ set "LOG_DIR=%SCRIPT_DIR%logs"
 set "LOG_FILE=%LOG_DIR%\fa-lab.log"
 set "ERROR_LOG_FILE=%LOG_DIR%\fa-lab.error.log"
 
-if not defined PORT set "PORT=4000"
+if not defined PORT set "PORT=80"
 cd /d "%SCRIPT_DIR%"
 
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
