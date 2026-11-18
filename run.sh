@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PID_FILE="$SCRIPT_DIR/fa-lab.pid"
 LOG_DIR="$SCRIPT_DIR/logs"
 LOG_FILE="$LOG_DIR/fa-lab.log"
-PORT="${PORT:-80}"
+PORT="${PORT:-8080}"
 
 cd "$SCRIPT_DIR"
 mkdir -p "$LOG_DIR"

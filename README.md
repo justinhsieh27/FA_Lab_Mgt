@@ -27,7 +27,7 @@ run.bat
 
 `run.bat` starts the service in the background, storing its PID in `fa-lab.pid`, standard output in `logs\fa-lab.log`, and errors in `logs\fa-lab.error.log`. To use another port, run `set PORT=4001 && run.bat`.
 
-Open `http://localhost` on the host computer. Other users on the same internal network can use `http://<FA-Lab-host-IP>`.
+Open `http://localhost:8080` on the host computer. Other users on the same internal network can use `http://<FA-Lab-host-IP>:8080`.
 
 Initial accounts (change the passwords before production use):
 
@@ -61,4 +61,4 @@ The service makes a backup at startup and once every 24 hours. Keep these folder
 
 ## Deployment note
 
-This first version intentionally runs as a local internal service. Before exposing it beyond the FAB intranet, place it behind the factory's approved HTTPS reverse proxy and firewall policy. Do not expose port 80 directly to the public Internet.
+This first version intentionally runs as a local internal service. Before exposing it beyond the FAB intranet, place it behind the factory's approved HTTPS reverse proxy and firewall policy. Do not expose port 8080 directly to the public Internet.
