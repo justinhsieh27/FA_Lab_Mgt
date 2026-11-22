@@ -8,7 +8,7 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 
 const app = express();
-const PORT = Number(process.env.PORT || 8080);
+const PORT = Number(process.env.PORT || 4000);
 const ROOT = __dirname;
 const DATA_DIR = process.env.FA_LAB_DATA_DIR || path.join(ROOT, 'data');
 const UPLOAD_DIR = process.env.FA_LAB_UPLOAD_DIR || path.join(ROOT, 'uploads');
@@ -91,14 +91,23 @@ function averageDate(dates) {
 }
 
 function seedUsers() {
-  if (db.prepare('SELECT COUNT(*) AS count FROM users').get().count) return;
-  const insert = db.prepare('INSERT INTO users (username, display_name, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)');
-  const stamp = now();
-  insert.run('manager', 'FA Lab Manager', bcrypt.hashSync('ChangeMe!2026', 10), 'manager', stamp);
-  for (let index = 1; index <= 8; index += 1) {
-    insert.run(`engineer${String(index).padStart(2, '0')}`, `Engineer ${index}`, bcrypt.hashSync('ChangeMe!2026', 10), 'engineer', stamp);
+  if (!db.prepare('SELECT COUNT(*) AS count FROM users').get().count) {
+    const insert = db.prepare('INSERT INTO users (username, display_name, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)');
+    const stamp = now();
+    insert.run('manager', 'FA Lab Manager', bcrypt.hashSync('manager', 10), 'manager', stamp);
+    for (let index = 1; index <= 8; index += 1) {
+      const username = `engineer${String(index).padStart(2, '0')}`;
+      insert.run(username, `Engineer ${index}`, bcrypt.hashSync(username, 10), 'engineer', stamp);
+    }
+    insert.run('guest', 'Guest Viewer', bcrypt.hashSync('guest', 10), 'guest', stamp);
+    return;
   }
-  insert.run('guest', 'Guest Viewer', bcrypt.hashSync('ChangeMe!2026', 10), 'guest', stamp);
+  const update = db.prepare('UPDATE users SET password_hash=? WHERE id=?');
+  for (const user of db.prepare('SELECT id, username, password_hash FROM users').all()) {
+    if (bcrypt.compareSync('ChangeMe!2026', user.password_hash)) {
+      update.run(bcrypt.hashSync(user.username, 10), user.id);
+    }
+  }
 }
 seedUsers();
 
@@ -291,6 +300,16 @@ app.put('/api/auth/language', requireAuth(), (req, res) => {
   db.prepare('UPDATE users SET language=? WHERE id=?').run(language, req.user.id);
   res.json({ language });
 });
+app.put('/api/auth/password', requireAuth(), (req, res) => {
+  const currentPassword = String(req.body.current_password ?? '');
+  const newPassword = String(req.body.new_password ?? '');
+  if (!newPassword) return res.status(400).json({ error: 'New password is required.' });
+  const user = db.prepare('SELECT * FROM users WHERE id=?').get(req.user.id);
+  if (!user || !bcrypt.compareSync(currentPassword, user.password_hash)) return res.status(400).json({ error: 'Current password is incorrect.' });
+  db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(bcrypt.hashSync(newPassword, 10), user.id);
+  audit(req.user, 'CHANGE_PASSWORD', 'user', user.username, {});
+  res.json({ ok: true });
+});
 
 app.get('/api/meta', requireAuth(), (req, res) => res.json({ departments: DEPARTMENTS, types: CASE_TYPES, technologies: TECHNOLOGIES, priorities: PRIORITIES }));
 app.get('/api/cases', requireAuth('manager', 'engineer'), (req, res) => {
@@ -402,9 +421,10 @@ app.post('/api/users', requireAuth('manager'), (req, res) => {
   const username = safeText(req.body.username).toLowerCase();
   const displayName = safeText(req.body.display_name);
   const role = ROLES.includes(req.body.role) ? req.body.role : null;
-  if (!/^[a-z0-9._-]{3,40}$/.test(username) || !displayName || !role || String(req.body.password || '').length < 8) return res.status(400).json({ error: 'Please enter a valid username, display name, role and 8+ character password.' });
+  const password = String(req.body.password || '') || username;
+  if (!/^[a-z0-9._-]{3,40}$/.test(username) || !displayName || !role) return res.status(400).json({ error: 'Please enter a valid username, display name, and role.' });
   try {
-    const result = db.prepare('INSERT INTO users (username, display_name, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)').run(username, displayName, bcrypt.hashSync(req.body.password, 10), role, now());
+    const result = db.prepare('INSERT INTO users (username, display_name, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)').run(username, displayName, bcrypt.hashSync(password, 10), role, now());
     const user = db.prepare('SELECT * FROM users WHERE id=?').get(result.lastInsertRowid);
     audit(req.user, 'CREATE', 'user', username, { displayName, role });
     res.status(201).json({ user: exportUser(user) });

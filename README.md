@@ -27,17 +27,17 @@ run.bat
 
 `run.bat` starts the service in the background, storing its PID in `fa-lab.pid`, standard output in `logs\fa-lab.log`, and errors in `logs\fa-lab.error.log`. To use another port, run `set PORT=4001 && run.bat`.
 
-Open `http://localhost:8080` on the host computer. Other users on the same internal network can use `http://<FA-Lab-host-IP>:8080`.
+Open `http://localhost:4000` on the host computer. Other users on the same internal network can use `http://<FA-Lab-host-IP>:4000`.
 
-Initial accounts (change the passwords before production use):
+Initial accounts (default password is the same as the username/ID; change passwords before production use):
 
 | Username | Password | Role |
 | --- | --- | --- |
-| `manager` | `ChangeMe!2026` | Manager |
-| `engineer01` … `engineer08` | `ChangeMe!2026` | Engineer |
-| `guest` | `ChangeMe!2026` | Guest |
+| `manager` | `manager` | Manager |
+| `engineer01` … `engineer08` | `engineer01` … `engineer08` | Engineer |
+| `guest` | `guest` | Guest |
 
-Use **User Access** as Manager to create, update, deactivate, or reset accounts. The Manager can update their own password from this screen as well.
+All users can change their own password at any time using the **Change Password** button in the top bar (no password strength restrictions). Use **User Access** as Manager to create, update, deactivate, or reset accounts. When creating a new account without specifying a password, the default password is set to the username.
 
 ## Data and backup locations
 
@@ -61,4 +61,4 @@ The service makes a backup at startup and once every 24 hours. Keep these folder
 
 ## Deployment note
 
-This first version intentionally runs as a local internal service. Before exposing it beyond the FAB intranet, place it behind the factory's approved HTTPS reverse proxy and firewall policy. Do not expose port 8080 directly to the public Internet.
+This first version intentionally runs as a local internal service. Before exposing it beyond the FAB intranet, place it behind the factory's approved HTTPS reverse proxy and firewall policy. Do not expose port 4000 directly to the public Internet.
