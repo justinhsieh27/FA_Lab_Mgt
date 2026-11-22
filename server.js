@@ -401,6 +401,29 @@ app.put('/api/jobs/:jobId', requireAuth('manager', 'engineer'), async (req, res)
   audit(req.user, 'UPDATE', 'job', updated.job_id, req.body);
   res.json({ job: updated });
 });
+app.put('/api/cases/:caseNo/jobs/batch', requireAuth('manager', 'engineer'), async (req, res) => {
+  const data = loadData();
+  const caseNo = req.params.caseNo;
+  const caseJobs = data.jobs.filter(row => row.case_no === caseNo);
+  if (!caseJobs.length) return res.status(404).json({ error: 'No Jobs found for this Case.' });
+  const updatedJobs = [];
+  for (const current of caseJobs) {
+    let updated = cleanJob({ ...req.body, job_id: current.job_id, case_no: current.case_no, sample_id: current.sample_id, sample_location: current.sample_location, cut_id: current.cut_id }, current);
+    if (updated.sequence_override === 'true' && req.user.role !== 'manager') return res.status(403).json({ error: 'Only a manager can enable a sequence override.' });
+    const permError = validateStepPermissions(updated, current, req.user);
+    if (permError) return res.status(403).json({ error: permError });
+    const sequenceError = validateSequence(updated);
+    if (sequenceError) return res.status(400).json({ error: sequenceError });
+    updated.updated_at = now();
+    updated = deriveJob(updated);
+    updatedJobs.push(updated);
+  }
+  const map = new Map(updatedJobs.map(item => [item.job_id, item]));
+  data.jobs = data.jobs.map(row => map.get(row.job_id) || row);
+  await saveData(data);
+  audit(req.user, 'BATCH_UPDATE', 'job', caseNo, req.body);
+  res.json({ jobs: updatedJobs });
+});
 
 app.get('/api/dashboard', requireAuth('manager', 'engineer'), (req, res) => {
   const data = loadData();
