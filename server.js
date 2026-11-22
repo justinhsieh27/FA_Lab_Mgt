@@ -441,6 +441,15 @@ app.put('/api/users/:id', requireAuth('manager'), (req, res) => {
   audit(req.user, 'UPDATE', 'user', current.username, { displayName, role, active });
   res.json({ user: exportUser(db.prepare('SELECT * FROM users WHERE id=?').get(current.id)) });
 });
+app.delete('/api/users/:id', requireAuth('manager'), (req, res) => {
+  const current = db.prepare('SELECT * FROM users WHERE id=?').get(req.params.id);
+  if (!current) return res.status(404).json({ error: 'User not found.' });
+  if (current.id === req.user.id) return res.status(400).json({ error: 'Cannot delete your own account.' });
+  db.prepare('DELETE FROM sessions WHERE user_id=?').run(current.id);
+  db.prepare('DELETE FROM users WHERE id=?').run(current.id);
+  audit(req.user, 'DELETE', 'user', current.username, { displayName: current.display_name, role: current.role });
+  res.json({ ok: true });
+});
 app.get('/api/audit', requireAuth('manager'), (req, res) => res.json({ entries: db.prepare('SELECT * FROM audit_log ORDER BY id DESC LIMIT 500').all().map(row => ({ ...row, detail: json(row.detail, {}) })) }));
 
 const storage = multer.diskStorage({ destination: (_req, _file, cb) => cb(null, UPLOAD_DIR), filename: (_req, file, cb) => cb(null, `${Date.now()}-${crypto.randomBytes(8).toString('hex')}${path.extname(file.originalname)}`) });

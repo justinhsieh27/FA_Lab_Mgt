@@ -37,7 +37,7 @@ Initial accounts (default password is the same as the username/ID; change passwo
 | `engineer01` … `engineer08` | `engineer01` … `engineer08` | Engineer |
 | `guest` | `guest` | Guest |
 
-All users can change their own password at any time using the **Change Password** button in the top bar (no password strength restrictions). Use **User Access** as Manager to create, update, deactivate, or reset accounts. When creating a new account without specifying a password, the default password is set to the username.
+All users can change their own password at any time using the **Change Password** button in the top bar (no password strength restrictions). Use **User Access** as Manager to create, update, deactivate, reset, or delete accounts. When creating a new account without specifying a password, the default password is set to the username.
 
 ## Data and backup locations
 
