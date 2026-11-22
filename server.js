@@ -353,11 +353,26 @@ app.put('/api/cases/:caseNo', requireAuth('manager', 'engineer'), async (req, re
   audit(req.user, 'UPDATE', 'case', updated.case_no, req.body);
   res.json({ case: deriveCase(updated, data.jobs) });
 });
+function validateStepPermissions(job, existingJob, user) {
+  if (user.role === 'manager') return null;
+  const oldSteps = existingJob ? standardizeSteps(existingJob) : [];
+  const newSteps = standardizeSteps(job);
+  for (const step of newSteps) {
+    const oldStep = oldSteps.find(item => item.id === step.id);
+    const oldStatus = oldStep ? oldStep.status : 'Not Started';
+    if (step.status !== oldStatus && step.owner !== user.username) {
+      return `Only the step Owner or a Manager can change the status of "${step.name}".`;
+    }
+  }
+  return null;
+}
 app.post('/api/jobs', requireAuth('manager', 'engineer'), async (req, res) => {
   const data = loadData();
   if (!data.cases.some(row => row.case_no === safeText(req.body.case_no))) return res.status(400).json({ error: 'A valid Case No. is required.' });
   let row = cleanJob(req.body);
   if (row.sequence_override === 'true' && req.user.role !== 'manager') return res.status(403).json({ error: 'Only a manager can enable a sequence override.' });
+  const permError = validateStepPermissions(row, null, req.user);
+  if (permError) return res.status(403).json({ error: permError });
   const sequenceError = validateSequence(row);
   if (sequenceError) return res.status(400).json({ error: sequenceError });
   if (!row.job_id) return res.status(400).json({ error: 'Job ID is required.' });
@@ -375,6 +390,8 @@ app.put('/api/jobs/:jobId', requireAuth('manager', 'engineer'), async (req, res)
   if (index < 0) return res.status(404).json({ error: 'Job not found.' });
   let updated = cleanJob({ ...req.body, job_id: data.jobs[index].job_id, case_no: data.jobs[index].case_no }, data.jobs[index]);
   if (updated.sequence_override === 'true' && req.user.role !== 'manager') return res.status(403).json({ error: 'Only a manager can enable a sequence override.' });
+  const permError = validateStepPermissions(updated, data.jobs[index], req.user);
+  if (permError) return res.status(403).json({ error: permError });
   const sequenceError = validateSequence(updated);
   if (sequenceError) return res.status(400).json({ error: sequenceError });
   updated.updated_at = now();
