@@ -52,7 +52,7 @@ The service makes a backup at startup and once every 24 hours. Keep these folder
 
 - A Case No. is entered manually and must be unique.
 - New cases default to `PRS` and `Normal` priority.
-- Batch Job creation accepts `Sample ID | Location | Cut count` on one line, such as `S1|Center|2`; it produces `<Case No.>.S1C1`, `<Case No.>.S1C2`, etc.
+- Batch Job creation accepts one `Sample ID` per line (such as `S1C1`, `S1C2`); it produces `<Case No.>.<Sample ID>`.
 - Each Job starts as `Sample preparation → FIB or SELA → TEM or SEM`.
 - Steps are sequential by default. A Manager can enable a documented sequence override and add custom steps.
 - The Case status derives from its active Jobs. Manager-only `On Hold` and `Cancelled` overrides take priority.
