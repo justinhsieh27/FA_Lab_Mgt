@@ -12,10 +12,21 @@ mkdir -p "$LOG_DIR"
 
 if [[ -f "$PID_FILE" ]]; then
   EXISTING_PID="$(<"$PID_FILE")"
-  if kill -0 "$EXISTING_PID" 2>/dev/null; then
-    echo "FA Lab Case Management is already running (PID $EXISTING_PID)."
-    echo "Open: http://localhost:$PORT"
-    exit 0
+  if [[ -n "$EXISTING_PID" ]] && kill -0 "$EXISTING_PID" 2>/dev/null; then
+    echo "Stopping previous FA Lab Case Management process (PID $EXISTING_PID)..."
+    pkill -P "$EXISTING_PID" 2>/dev/null || true
+    kill "$EXISTING_PID" 2>/dev/null || true
+    for _ in {1..15}; do
+      if ! kill -0 "$EXISTING_PID" 2>/dev/null; then
+        break
+      fi
+      sleep 0.2
+    done
+    if kill -0 "$EXISTING_PID" 2>/dev/null; then
+      pkill -9 -P "$EXISTING_PID" 2>/dev/null || true
+      kill -9 "$EXISTING_PID" 2>/dev/null || true
+      sleep 0.2
+    fi
   fi
   rm -f "$PID_FILE"
 fi
@@ -26,7 +37,7 @@ if command -v lsof >/dev/null 2>&1 && lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/
   exit 1
 fi
 
-nohup env PORT="$PORT" npm run start >>"$LOG_FILE" 2>&1 < /dev/null &
+nohup env PORT="$PORT" node server.js >>"$LOG_FILE" 2>&1 < /dev/null &
 SERVER_PID=$!
 echo "$SERVER_PID" > "$PID_FILE"
 

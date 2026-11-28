@@ -28,9 +28,9 @@ const JOB_HEADERS = [
   'created_at', 'updated_at'
 ];
 const ROLES = ['manager', 'engineer', 'guest'];
-const DEPARTMENTS = ['ETC', 'LIT', 'PVD', 'CVD', 'WET', 'DIF', 'PIE', 'PDE', 'RA', 'Others'];
-const CASE_TYPES = ['PRS', 'Reliability', 'WAT', 'Yield', 'Defect', 'Others'];
-const TECHNOLOGIES = ['N40ULP', 'N90BCD', '130BCD', 'E-Flash', 'I-Proj', 'Others'];
+const DEPARTMENTS = ['ETC', 'LIT', 'PVD', 'CVD', 'WET', 'DIF', 'PIE', 'PDE', 'RA'];
+const CASE_TYPES = ['PRS', 'Reliability', 'WAT', 'Yield', 'Defect'];
+const TECHNOLOGIES = ['N40ULP', 'N90BCD', '130BCD', 'E-Flash', 'I-Proj'];
 const PRIORITIES = ['Super Hot Run', 'Hot Run', 'Normal'];
 
 for (const dir of [DATA_DIR, UPLOAD_DIR, BACKUP_DIR]) fs.mkdirSync(dir, { recursive: true });
@@ -234,9 +234,9 @@ function cleanCase(input, existing = {}) {
   const row = { ...existing };
   for (const field of CASE_HEADERS) if (field in input && !['end_date', 'cycle_time_days', 'created_at', 'updated_at'].includes(field)) row[field] = safeText(input[field]);
   row.case_no = safeText(row.case_no);
-  row.department = DEPARTMENTS.includes(row.department) ? row.department : 'Others';
-  row.type = CASE_TYPES.includes(row.type) ? row.type : 'PRS';
-  row.tech = TECHNOLOGIES.includes(row.tech) ? row.tech : 'N40ULP';
+  row.department = row.department === 'Others' && row.department_other ? row.department_other : (row.department || 'ETC');
+  row.type = row.type === 'Others' && row.type_other ? row.type_other : (row.type || 'PRS');
+  row.tech = row.tech === 'Others' && row.tech_other ? row.tech_other : (row.tech || 'N40ULP');
   row.priority = PRIORITIES.includes(row.priority) ? row.priority : 'Normal';
   row.start_date = dateOnly(row.start_date);
   row.committed_eta = dateOnly(row.committed_eta);
@@ -311,7 +311,21 @@ app.put('/api/auth/password', requireAuth(), (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/meta', requireAuth(), (req, res) => res.json({ departments: DEPARTMENTS, types: CASE_TYPES, technologies: TECHNOLOGIES, priorities: PRIORITIES }));
+app.get('/api/meta', requireAuth(), (req, res) => {
+  const cases = loadData().cases;
+  const collect = (defaults, field, otherField) => [
+    ...new Set([
+      ...defaults,
+      ...cases.map(row => row[field] === 'Others' ? safeText(row[otherField]) : safeText(row[field])).filter(v => v && v !== 'Others')
+    ])
+  ];
+  res.json({
+    departments: collect(DEPARTMENTS, 'department', 'department_other'),
+    types: collect(CASE_TYPES, 'type', 'type_other'),
+    technologies: collect(TECHNOLOGIES, 'tech', 'tech_other'),
+    priorities: PRIORITIES
+  });
+});
 app.get('/api/cases', requireAuth('manager', 'engineer'), (req, res) => {
   const data = loadData();
   res.json({ cases: data.cases.map(row => deriveCase(row, data.jobs)).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))) });
@@ -366,10 +380,60 @@ function validateStepPermissions(job, existingJob, user) {
   }
   return null;
 }
+function applyFirstJobSteps(firstSteps, targetJob) {
+  const targetSteps = standardizeSteps(targetJob);
+  return firstSteps.map((step, index) => {
+    const existing = targetSteps.find(item => item.id === step.id) || targetSteps[index];
+    return {
+      ...(existing || step),
+      id: existing ? existing.id : step.id,
+      name: existing ? existing.name : step.name,
+      owner: step.owner,
+      status: step.status,
+      start_date: step.start_date,
+      end_date: step.end_date,
+      required: step.required !== false
+    };
+  });
+}
+function syncCaseJobsFromFirst(data, caseNo, user) {
+  const caseJobs = data.jobs.filter(row => row.case_no === caseNo);
+  if (caseJobs.length < 2) return { jobs: caseJobs };
+  const first = deriveJob(caseJobs[0]);
+  const firstSteps = standardizeSteps(first);
+  const updatedJobs = [first];
+  for (const current of caseJobs.slice(1)) {
+    let updated = cleanJob({
+      steps: applyFirstJobSteps(firstSteps, current),
+      sequence_override: first.sequence_override,
+      sequence_override_reason: first.sequence_override_reason
+    }, current);
+    const permError = validateStepPermissions(updated, current, user);
+    if (permError) return { status: 403, error: permError };
+    const sequenceError = validateSequence(updated);
+    if (sequenceError) return { status: 400, error: sequenceError };
+    updated.updated_at = now();
+    updated = deriveJob(updated);
+    updatedJobs.push(updated);
+  }
+  const map = new Map(updatedJobs.map(item => [item.job_id, item]));
+  data.jobs = data.jobs.map(row => map.get(row.job_id) || row);
+  return { jobs: updatedJobs };
+}
 app.post('/api/jobs', requireAuth('manager', 'engineer'), async (req, res) => {
   const data = loadData();
   if (!data.cases.some(row => row.case_no === safeText(req.body.case_no))) return res.status(400).json({ error: 'A valid Case No. is required.' });
   let row = cleanJob(req.body);
+  if (req.body.follow_first) {
+    const first = data.jobs.find(item => item.case_no === row.case_no);
+    if (first) {
+      row = cleanJob({
+        steps: applyFirstJobSteps(standardizeSteps(first), row),
+        sequence_override: first.sequence_override,
+        sequence_override_reason: first.sequence_override_reason
+      }, row);
+    }
+  }
   if (row.sequence_override === 'true' && req.user.role !== 'manager') return res.status(403).json({ error: 'Only a manager can enable a sequence override.' });
   const permError = validateStepPermissions(row, null, req.user);
   if (permError) return res.status(403).json({ error: permError });
@@ -397,9 +461,24 @@ app.put('/api/jobs/:jobId', requireAuth('manager', 'engineer'), async (req, res)
   updated.updated_at = now();
   updated = deriveJob(updated);
   data.jobs[index] = updated;
+  if (req.body.follow_first) {
+    const sync = syncCaseJobsFromFirst(data, updated.case_no, req.user);
+    if (sync.error) return res.status(sync.status || 400).json({ error: sync.error });
+  }
   await saveData(data);
   audit(req.user, 'UPDATE', 'job', updated.job_id, req.body);
   res.json({ job: updated });
+});
+app.put('/api/cases/:caseNo/jobs/follow-first', requireAuth('manager', 'engineer'), async (req, res) => {
+  const data = loadData();
+  const caseNo = req.params.caseNo;
+  const caseJobs = data.jobs.filter(row => row.case_no === caseNo);
+  if (!caseJobs.length) return res.status(404).json({ error: 'No Jobs found for this Case.' });
+  const sync = syncCaseJobsFromFirst(data, caseNo, req.user);
+  if (sync.error) return res.status(sync.status || 400).json({ error: sync.error });
+  await saveData(data);
+  audit(req.user, 'FOLLOW_FIRST', 'job', caseNo, { source_job_id: caseJobs[0].job_id });
+  res.json({ jobs: sync.jobs });
 });
 app.put('/api/cases/:caseNo/jobs/batch', requireAuth('manager', 'engineer'), async (req, res) => {
   const data = loadData();
@@ -451,8 +530,24 @@ app.get('/api/queue', requireAuth(), (req, res) => {
 app.get('/api/my-work', requireAuth('manager', 'engineer'), (req, res) => {
   const data = loadData();
   const jobs = data.jobs.map(deriveJob);
-  const work = jobs.filter(job => job.steps.some(step => step.owner === req.user.username && !['Completed', 'Cancelled'].includes(step.status))).map(job => ({ ...job, case: data.cases.find(row => row.case_no === job.case_no) || {} }));
+  const work = jobs.filter(job => job.job_owner === req.user.username && !['Completed', 'Cancelled'].includes(job.status)).map(job => ({ ...job, case: data.cases.find(row => row.case_no === job.case_no) || {} }));
   res.json({ jobs: work });
+});
+app.get('/api/team-work', requireAuth('manager'), (req, res) => {
+  const data = loadData();
+  const users = db.prepare("SELECT id, username, display_name, role FROM users WHERE active=1 AND role IN ('manager', 'engineer') ORDER BY display_name").all();
+  const caseMap = new Map(data.cases.map(row => [row.case_no, row]));
+  const openJobs = data.jobs
+    .map(deriveJob)
+    .filter(job => !['Completed', 'Cancelled'].includes(job.status))
+    .map(job => ({ ...job, case: caseMap.get(job.case_no) || {} }));
+  const members = users.map(user => ({
+    user,
+    jobs: openJobs.filter(job => job.job_owner === user.username)
+  }));
+  const knownUsernames = new Set(users.map(u => u.username));
+  const unassigned = openJobs.filter(job => !job.job_owner || !knownUsernames.has(job.job_owner));
+  res.json({ members, unassigned });
 });
 
 app.get('/api/users', requireAuth('manager'), (req, res) => res.json({ users: db.prepare('SELECT * FROM users ORDER BY role, display_name').all().map(exportUser) }));
